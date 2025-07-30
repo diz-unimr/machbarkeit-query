@@ -1,0 +1,15 @@
+app:
+  log_level: debug
+feasibility:
+  base_url: https://feasibility.diz.uni-marburg.de/query/execute
+  auth:
+    basic:
+      user:
+      password:
+  retry:
+    count: 10
+    timeout: 10
+    wait: 5
+    max_wait: 20
+broker:
+  url: ws://localhost:3000/feasibility/ws
