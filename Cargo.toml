@@ -20,4 +20,4 @@ reqwest-retry = "0.7.0"
 reqwest-middleware = "0.4.2"
 config = "0.15.13"
 serde_derive = "1.0.219"
-tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
