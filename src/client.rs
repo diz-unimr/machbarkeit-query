@@ -3,13 +3,10 @@ use crate::model::{FeasibilityRequest, QueryState};
 use log::debug;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
-use reqwest_middleware::{ClientBuilder, ClientWithMiddleware};
-use reqwest_retry::{policies::ExponentialBackoff, RetryTransientMiddleware};
-use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub(crate) struct RestClient {
-    client: ClientWithMiddleware,
+    client: Client,
     url: String,
 }
 
@@ -30,23 +27,8 @@ impl RestClient {
             }
         }
 
-        // retry
-        let retry = ExponentialBackoff::builder()
-            .retry_bounds(
-                Duration::from_secs(config.retry.wait),
-                Duration::from_secs(config.retry.max_wait),
-            )
-            .build_with_max_retries(config.retry.count);
-
-        // client with retry middleware
-        let client = ClientBuilder::new(
-            Client::builder()
-                .default_headers(headers.clone())
-                .timeout(Duration::from_secs(config.retry.timeout))
-                .build()?,
-        )
-        .with(RetryTransientMiddleware::new_with_policy(retry))
-        .build();
+        // client
+        let client = Client::builder().default_headers(headers.clone()).build()?;
 
         Ok(RestClient {
             client,
