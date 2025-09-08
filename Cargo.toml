@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1.47.0", features = ["full"] }
-tokio-tungstenite = "0.27.0"
+tokio-tungstenite = { version = "0.27.0", features = ["native-tls"] }
 url = "2.5.4"
 anyhow = "1.0.98"
 chrono = { version = "0.4.41", features = ["serde"] }
