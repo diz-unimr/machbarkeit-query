@@ -93,7 +93,7 @@ impl TokenService {
                 TokenServiceError::TokenError(e.to_string().into())
             }
             _ => {
-                error!("Unexpected error: {:?}", e);
+                error!("Unexpected error: {e}");
                 TokenServiceError::TokenError("Unexpected error".to_string().into())
             }
         })

@@ -19,12 +19,12 @@ impl RestClient {
             HeaderValue::from_static("application/fhir+json"),
         );
         // set auth header as default
-        if let Some(auth) = config.auth.as_ref().and_then(|a| a.basic.as_ref()) {
-            if let (Some(user), Some(password)) = (auth.user.clone(), auth.password.clone()) {
-                // auth header
-                let auth_value = create_auth_header(user, Some(password));
-                headers.insert(AUTHORIZATION, auth_value);
-            }
+        if let Some(auth) = config.auth.as_ref().and_then(|a| a.basic.as_ref())
+            && let (Some(user), Some(password)) = (auth.user.clone(), auth.password.clone())
+        {
+            // auth header
+            let auth_value = create_auth_header(user, Some(password));
+            headers.insert(AUTHORIZATION, auth_value);
         }
 
         // client
