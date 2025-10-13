@@ -9,12 +9,16 @@ use crate::config::AppConfig;
 use crate::model::FeasibilityRequest;
 use crate::model::QueryState::Completed;
 use anyhow::anyhow;
+use futures_util::stream::SplitStream;
 use futures_util::{SinkExt, StreamExt};
-use log::{debug, error, info};
+use log::{debug, error, info, trace};
 use reqwest::header::{HeaderValue, AUTHORIZATION};
 use reqwest::StatusCode;
 use tokio::net::TcpStream;
+use tokio::sync::broadcast;
+use tokio::sync::broadcast::{Receiver, Sender};
 use tokio_tungstenite::tungstenite::client::IntoClientRequest;
+use tokio_tungstenite::tungstenite::Utf8Bytes;
 use tokio_tungstenite::{
     connect_async, tungstenite::protocol::Message, MaybeTlsStream, WebSocketStream,
 };
@@ -72,71 +76,102 @@ async fn main() -> Result<(), anyhow::Error> {
     let (ws_stream, _) = connect_async(request.clone())
         .await
         .expect("Failed to connect");
-    info!("WebSocket client connected");
+    info!("WebSocket client connected to {}", config.broker.url);
+
+    // split stream and build channel to send messages to further downstream
+    let (mut sink, stream) = ws_stream.split();
+    let (sender, _) = broadcast::channel(10);
+    let mut receiver: Receiver<FeasibilityRequest> = sender.subscribe();
+
+    // forward messages from the channel to the sink
+    tokio::spawn(async move {
+        while let Ok(msg) = receiver.recv().await {
+            match msg.try_into() {
+                Ok(message) => {
+                    if sink.send(message).await.is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    error!("Failed to parse FeasibilityRequest: {}", e);
+                    break;
+                }
+            }
+        }
+    });
 
     // read incoming messages
     info!("Reading messages from {}", request.uri());
-    tokio::spawn(ws_read(ws_stream, client)).await?;
+    tokio::spawn(ws_read(stream, sender, client)).await?;
 
     Ok(())
 }
 
-async fn ws_read(ws_stream: WebSocketStream<MaybeTlsStream<TcpStream>>, client: RestClient) {
-    let (mut sink, mut stream) = ws_stream.split();
-
+async fn ws_read(
+    receiver: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
+    sender: Sender<FeasibilityRequest>,
+    client: RestClient,
+) {
     loop {
-        while let Some(Ok(msg)) = stream.next().await {
-            match msg {
-                Message::Text(msg) => {
-                    debug!("Message received: {}", msg);
+        receiver
+            .for_each_concurrent(42, |m| async {
+                match m {
+                    Ok(Message::Text(msg)) => {
+                        trace!("Message received: {}", msg);
 
-                    // parse request
-                    let mut request = serde_json::from_str::<FeasibilityRequest>(&msg);
-                    match &mut request {
-                        Ok(r) => {
-                            // execute request
-                            match client.clone().execute(r).await {
-                                Ok(result) => {
-                                    // send back to websocket
-                                    if let Ok(result) = serde_json::to_string(result) {
-                                        debug!("Feasibility result: {}", result);
-                                        let msg = Message::text(result.to_string());
-                                        if let Err(e) = sink.send(msg).await {
-                                            error!("Failed to send message: {}", e);
-                                        }
-                                    }
-                                }
-                                Err(e) => {
-                                    r.status = Completed;
-                                    r.result_body =
-                                        Some(format!("Failed to execute request: {}", e));
-                                    r.result_code =
-                                        Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
-                                    debug!("Sending back error result: {}", e);
-
-                                    if let Err(e) = sink
-                                        .send(Message::text(
-                                            serde_json::to_string(r)
-                                                .expect("Failed to serialize FeasibilityRequest"),
-                                        ))
-                                        .await
-                                    {
-                                        error!("Failed to send message: {}", e);
-                                    }
-                                }
-                            }
-                        }
-                        Err(e) => {
-                            error!("Failed to parse feasibility request: {}", e);
+                        if let Err(e) = handle_request(&client, &sender, msg).await {
+                            error!("Error handling request: {}", e);
                         }
                     }
+                    Ok(Message::Close(_)) => {
+                        debug!("Closing WebSocket connection");
+                    }
+                    Ok(_) => error!("Unexpected message type"),
+                    Err(e) => {
+                        error!("WebSocket error: {}", e);
+                        return;
+                    }
                 }
-                Message::Close(_) => {
-                    debug!("Closing WebSocket connection");
-                    break;
+            })
+            .await;
+
+        info!("Websocket closed");
+        break;
+    }
+}
+
+async fn handle_request(
+    client: &RestClient,
+    sender: &Sender<FeasibilityRequest>,
+    msg: Utf8Bytes,
+) -> Result<(), anyhow::Error> {
+    // parse request
+    let request = serde_json::from_str::<FeasibilityRequest>(&msg);
+    match request {
+        Ok(mut r) => {
+            // execute request
+            match client.clone().execute(&mut r).await {
+                Ok(result) => {
+                    // send back to websocket
+                    info!("Sending back feasibility result id={}", result.id);
+                    if let Err(e) = sender.send(result.clone()) {
+                        Err(anyhow!("Failed to send message: {}", e))?;
+                    }
                 }
-                _ => error!("Unexpected message type"),
+                Err(e) => {
+                    r.status = Completed;
+                    r.result_body = Some(format!("Failed to execute request: {}", e));
+                    r.result_code = Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
+                    info!("Sending back feasibility result id={}: {}", r.id, e);
+
+                    sender.send(r)?;
+                }
             }
         }
+        Err(e) => {
+            error!("Failed to parse feasibility request: {}", e);
+        }
     }
+
+    Ok(())
 }
