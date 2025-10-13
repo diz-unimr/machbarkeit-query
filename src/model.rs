@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
 #[derive(Clone, Debug, PartialEq, PartialOrd, Deserialize, Serialize)]
@@ -20,7 +21,7 @@ impl Into<String> for QueryState {
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub(crate) struct FeasibilityRequest {
-    id: Uuid,
+    pub(crate) id: Uuid,
     date: DateTime<Utc>,
     pub(crate) query: serde_json::Value,
     pub(crate) status: QueryState,
@@ -30,4 +31,12 @@ pub(crate) struct FeasibilityRequest {
     pub(crate) result_body: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) result_duration: Option<u32>,
+}
+
+impl TryInto<Message> for FeasibilityRequest {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Message, Self::Error> {
+        Ok(Message::from(serde_json::to_string(&self)?))
+    }
 }

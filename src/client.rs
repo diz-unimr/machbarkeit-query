@@ -1,6 +1,6 @@
 use crate::config::Server;
 use crate::model::{FeasibilityRequest, QueryState};
-use log::debug;
+use log::info;
 use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
 use reqwest::Client;
 
@@ -40,7 +40,7 @@ impl RestClient {
         self,
         request: &mut FeasibilityRequest,
     ) -> Result<&FeasibilityRequest, anyhow::Error> {
-        debug!("Sending bundle to: {}", self.url);
+        info!("Sending request id={} to {}", request.id, self.url);
         let payload = serde_json::to_string(&request.query)?;
         let response = self
             .client
