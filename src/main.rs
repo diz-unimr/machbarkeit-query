@@ -41,7 +41,7 @@ async fn main() -> Result<(), anyhow::Error> {
     let client = RestClient::new(&config.feasibility)?;
 
     // auth token service
-    let token_service = match &config.broker.auth.map(|a| a.client_credentials).flatten() {
+    let token_service = match &config.broker.auth.and_then(|a| a.client_credentials) {
         None => None,
         Some(auth) => {
             // token service
@@ -93,7 +93,7 @@ async fn main() -> Result<(), anyhow::Error> {
                     }
                 }
                 Err(e) => {
-                    error!("Failed to parse FeasibilityRequest: {}", e);
+                    error!("Failed to parse FeasibilityRequest: {e}");
                     break;
                 }
             }
@@ -112,32 +112,28 @@ async fn ws_read(
     sender: Sender<FeasibilityRequest>,
     client: RestClient,
 ) {
-    loop {
-        receiver
-            .for_each_concurrent(42, |m| async {
-                match m {
-                    Ok(Message::Text(msg)) => {
-                        trace!("Message received: {}", msg);
+    receiver
+        .for_each_concurrent(42, |m| async {
+            match m {
+                Ok(Message::Text(msg)) => {
+                    trace!("Message received: {msg}");
 
-                        if let Err(e) = handle_request(&client, &sender, msg).await {
-                            error!("Error handling request: {}", e);
-                        }
-                    }
-                    Ok(Message::Close(_)) => {
-                        debug!("Closing WebSocket connection");
-                    }
-                    Ok(_) => error!("Unexpected message type"),
-                    Err(e) => {
-                        error!("WebSocket error: {}", e);
-                        return;
+                    if let Err(e) = handle_request(&client, &sender, msg).await {
+                        error!("Error handling request: {e}");
                     }
                 }
-            })
-            .await;
+                Ok(Message::Close(_)) => {
+                    debug!("Closing WebSocket connection");
+                }
+                Ok(_) => error!("Unexpected message type"),
+                Err(e) => {
+                    error!("WebSocket error: {e}");
+                }
+            }
+        })
+        .await;
 
-        info!("Websocket closed");
-        break;
-    }
+    info!("Websocket closed");
 }
 
 async fn handle_request(
@@ -160,7 +156,7 @@ async fn handle_request(
                 }
                 Err(e) => {
                     r.status = Completed;
-                    r.result_body = Some(format!("Failed to execute request: {}", e));
+                    r.result_body = Some(format!("Failed to execute request: {e}"));
                     r.result_code = Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
                     info!("Sending back feasibility result id={}: {}", r.id, e);
 
@@ -169,7 +165,7 @@ async fn handle_request(
             }
         }
         Err(e) => {
-            error!("Failed to parse feasibility request: {}", e);
+            error!("Failed to parse feasibility request: {e}");
         }
     }
 
