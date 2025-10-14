@@ -7,7 +7,7 @@ feasibility:
       user:
       password:
 broker:
-  url: ws://localhost:3000/feasibility/ws
+  url:
 #  auth:
 #    client_credentials:
 #      token_url:
