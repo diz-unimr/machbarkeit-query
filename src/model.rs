@@ -40,3 +40,16 @@ impl TryInto<Message> for FeasibilityRequest {
         Ok(Message::from(serde_json::to_string(&self)?))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::model::QueryState;
+
+    #[test]
+    fn into_query_state_test() {
+        let pending: String = QueryState::Pending.into();
+        let completed: String = QueryState::Completed.into();
+        assert_eq!(pending, "pending");
+        assert_eq!(completed, "completed");
+    }
+}
