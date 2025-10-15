@@ -1,7 +1,7 @@
 app:
   log_level: info
 feasibility:
-  base_url: https://feasibility.diz.uni-marburg.de/query/execute
+  base_url:
   auth:
     basic:
       user:

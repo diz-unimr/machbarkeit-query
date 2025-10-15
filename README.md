@@ -23,15 +23,15 @@ results. The actual (structured) query is send to the execution service with a H
 
 Application properties are read from a properties file ([app.yaml](./app.yaml)) with default values.
 
-| Name                             | Default | Description                                    |
-|----------------------------------|---------|------------------------------------------------|
-| `app.log_level`                  | info    | Log level (error,warn,info,debug,trace)        |
-| `feasibility.base_url`           |         | Base url of the (FLARE) query execute endpoint |
-| `broker.url`                     |         | Broker to connect to for requests (wss)        |
-| `broker.auth.client_credentials` |         | OIDC Client Credentials secret                 |
-| `broker.auth.token_url`          |         | OIDC Issuer token url                          |
-| `broker.auth.client_id`          |         | OIDC Client id                                 |
-| `broker.auth.client_secret`      |         | OIDC Client secret                             |
+| Name                             | Default | Description                               |
+|----------------------------------|---------|-------------------------------------------|
+| `app.log_level`                  | info    | Log level (error,warn,info,debug,trace)   |
+| `feasibility.base_url`           |         | Url of the (FLARE) query execute endpoint |
+| `broker.url`                     |         | Broker to connect to for requests (wss)   |
+| `broker.auth.client_credentials` |         | OIDC Client Credentials secret            |
+| `broker.auth.token_url`          |         | OIDC Issuer token url                     |
+| `broker.auth.client_id`          |         | OIDC Client id                            |
+| `broker.auth.client_secret`      |         | OIDC Client secret                        |
 
 ### Environment variables
 
