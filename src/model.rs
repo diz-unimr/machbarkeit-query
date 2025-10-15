@@ -22,7 +22,7 @@ impl Into<String> for QueryState {
 #[derive(Deserialize, Serialize, Debug, PartialEq, Clone)]
 pub(crate) struct FeasibilityRequest {
     pub(crate) id: Uuid,
-    date: DateTime<Utc>,
+    pub(crate) date: DateTime<Utc>,
     pub(crate) query: serde_json::Value,
     pub(crate) status: QueryState,
     #[serde(skip_serializing_if = "Option::is_none")]
