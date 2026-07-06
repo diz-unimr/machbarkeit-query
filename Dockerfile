@@ -1,8 +1,7 @@
-FROM rust:1.96.1-alpine3.22 AS build
+FROM rust:1.96.1-alpine3.24 AS build
 
 RUN set -ex && \
-    apk add --no-progress --no-cache \
-        openssl-dev openssl-libs-static musl-dev
+    apk add --no-progress --no-cache musl-dev
 
 WORKDIR /app
 COPY Cargo.toml Cargo.lock /app/
