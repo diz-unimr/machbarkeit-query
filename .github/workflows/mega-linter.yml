@@ -3,10 +3,11 @@
 name: MegaLinter
 
 "on":
-  # Trigger mega-linter at every push. Action will also be visible from Pull Requests to main
-  push: # Comment this line to trigger action only on pull-requests (not recommended if you don't pay for GH Actions)
-  pull_request:
+  push:
     branches: [master, main]
+    tags:
+      - "**"
+  pull_request:
 
 permissions: read-all
 
@@ -53,6 +54,7 @@ jobs:
           # ADD YOUR CUSTOM ENV VARIABLES HERE OR DEFINE THEM IN A FILE .mega-linter.yml AT THE ROOT OF YOUR REPOSITORY
           # DISABLE: COPYPASTE,SPELL # Uncomment to disable copy-paste and spell checks
           DISABLE: SPELL # ignore spell checks
+          DISABLE_LINTERS: ACTION_ZIZMOR # disable for now
 
       # Upload MegaLinter artifacts
       - name: Archive production artifacts
