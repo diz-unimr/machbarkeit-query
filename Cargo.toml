@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1.47.0", features = ["full"] }
-tokio-tungstenite = { version = "0.28.0", features = ["native-tls"] }
+tokio-tungstenite = { version = "0.29.0", features = ["native-tls"] }
 anyhow = "1.0.98"
 chrono = { version = "0.4.41", features = ["serde"] }
 futures-util = "0.3.31"
@@ -13,7 +13,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 log = "0.4.27"
 serde_json = "1.0.141"
-reqwest = "0.12.22"
+reqwest = "0.13.0"
 config = "0.15.13"
 serde_derive = "1.0.219"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
