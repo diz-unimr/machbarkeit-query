@@ -1,4 +1,4 @@
-use crate::client::RestClient;
+use crate::client::TargetClient;
 use crate::model::FeasibilityRequest;
 use crate::model::QueryState::Completed;
 use anyhow::anyhow;
@@ -6,6 +6,7 @@ use futures_util::stream::SplitStream;
 use futures_util::{SinkExt, StreamExt};
 use http::StatusCode;
 use log::{debug, error, info, trace};
+use std::sync::Arc;
 use tokio::net::TcpStream;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::{Receiver, Sender};
@@ -13,7 +14,7 @@ use tokio_tungstenite::tungstenite::handshake::server::Request;
 use tokio_tungstenite::tungstenite::{Message, Utf8Bytes};
 use tokio_tungstenite::{connect_async, MaybeTlsStream, WebSocketStream};
 
-pub async fn connect(ws_request: Request, client: RestClient) -> anyhow::Result<()> {
+pub async fn connect(ws_request: Request, client: TargetClient) -> anyhow::Result<()> {
     let (ws_stream, _) = connect_async(ws_request.clone()).await?;
     info!("WebSocket client connected to {}", ws_request.uri());
 
@@ -41,6 +42,7 @@ pub async fn connect(ws_request: Request, client: RestClient) -> anyhow::Result<
 
     // read incoming messages
     info!("Reading messages from {}", ws_request.uri());
+
     tokio::spawn(ws_read(stream, sender, client)).await?;
 
     Ok(())
@@ -49,15 +51,16 @@ pub async fn connect(ws_request: Request, client: RestClient) -> anyhow::Result<
 async fn ws_read(
     receiver: SplitStream<WebSocketStream<MaybeTlsStream<TcpStream>>>,
     sender: Sender<FeasibilityRequest>,
-    client: RestClient,
+    client: TargetClient,
 ) {
+    let client = Arc::new(client);
     receiver
         .for_each_concurrent(42, |m| async {
             match m {
                 Ok(Message::Text(msg)) => {
                     trace!("Message received: {msg}");
 
-                    if let Err(e) = handle_request(&client, &sender, msg).await {
+                    if let Err(e) = handle_request(client.clone(), &sender, msg).await {
                         error!("Error handling request: {e}");
                     }
                 }
@@ -76,16 +79,16 @@ async fn ws_read(
 }
 
 async fn handle_request(
-    client: &RestClient,
+    client: Arc<TargetClient>,
     sender: &Sender<FeasibilityRequest>,
     msg: Utf8Bytes,
-) -> Result<(), anyhow::Error> {
+) -> anyhow::Result<()> {
     // parse request
     let request = serde_json::from_str::<FeasibilityRequest>(&msg);
     match request {
-        Ok(mut r) => {
+        Ok(r) => {
             // execute request
-            match client.clone().execute(&mut r).await {
+            match client.execute(r.clone()).await {
                 Ok(result) => {
                     // send back to websocket
                     info!("Sending back feasibility result id={}", result.id);
@@ -94,9 +97,11 @@ async fn handle_request(
                     }
                 }
                 Err(e) => {
-                    r.status = Completed;
-                    r.result_body = Some(format!("Failed to execute request: {e}"));
-                    r.result_code = Some(StatusCode::INTERNAL_SERVER_ERROR.as_u16());
+                    let r = r.result(
+                        Completed,
+                        StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
+                        format!("Failed to execute request: {e}"),
+                    );
                     info!("Sending back feasibility result id={}: {}", r.id, e);
 
                     sender.send(r)?;
@@ -113,14 +118,16 @@ async fn handle_request(
 
 #[cfg(test)]
 mod tests {
-    use crate::client::RestClient;
-    use crate::config::Server;
+    use crate::client::cql::CqlClient;
+    use crate::client::flare::FlareClient;
+    use crate::client::TargetClient;
+    use crate::config::{Feasibility, FhirServer};
     use crate::model::FeasibilityRequest;
     use crate::model::QueryState::Pending;
     use crate::websocket::connect;
     use chrono::Utc;
     use futures_util::SinkExt;
-    use httpmock::Method::POST;
+    use httpmock::Method::{GET, POST};
     use httpmock::MockServer;
     use serde_json::Value;
     use tokio::net::TcpListener;
@@ -129,9 +136,7 @@ mod tests {
     use uuid::Uuid;
 
     #[tokio::test]
-    async fn request_handling_test() {
-        let _ = env_logger::try_init();
-
+    async fn flare_request_handling_test() {
         // mock flare server
         let flare = MockServer::start();
         // mock execute request
@@ -144,13 +149,36 @@ mod tests {
                 .body("42");
         });
 
-        let client = RestClient::new(&Server {
-            base_url: format!("{}/query/execute", flare.base_url()),
-            auth: None,
-        })
-        .unwrap();
+        let client = TargetClient::Flare(
+            FlareClient::new(&Feasibility {
+                service: "flare".to_string(),
+                base_url: format!("{}/query/execute", flare.base_url()),
+                auth: None,
+            })
+            .unwrap(),
+        );
 
         // setup websocket server
+        feed_websocket(FeasibilityRequest {
+            id: Uuid::new_v4(),
+            status: Pending,
+            query: Value::Null,
+            date: Utc::now(),
+            result_duration: None,
+            result_code: None,
+            result_body: None,
+        })
+        .await;
+
+        let url = "ws://localhost:12345/";
+        connect(url.into_client_request().unwrap(), client)
+            .await
+            .unwrap();
+
+        execute_mock.assert();
+    }
+
+    async fn feed_websocket(request: FeasibilityRequest) {
         let (tx, rx) = futures_channel::oneshot::channel();
         let f = async move {
             let listener = TcpListener::bind("127.0.0.1:12345").await.unwrap();
@@ -159,31 +187,89 @@ mod tests {
             let stream = accept_async(connection).await;
             let mut stream = stream.expect("Failed to handshake with connection");
 
-            stream
-                .send(
-                    FeasibilityRequest {
-                        id: Uuid::new_v4(),
-                        status: Pending,
-                        query: Value::Null,
-                        date: Utc::now(),
-                        result_duration: None,
-                        result_code: None,
-                        result_body: None,
-                    }
-                    .try_into()
-                    .unwrap(),
-                )
-                .await
-                .unwrap();
+            stream.send(request.try_into().unwrap()).await.unwrap();
         };
         tokio::spawn(f);
         rx.await.expect("Failed to wait for server to be ready");
+    }
+
+    #[tokio::test]
+    async fn cql_request_handling_test() {
+        // mock translate service
+        let translate = MockServer::start();
+        // mock execute request
+        let translate_mock = translate.mock(|when, then| {
+            when.method(POST)
+                .header("content-type", "application/sq+json")
+                .path("/translate");
+            then.status(200).header("content-type", "text/plain").body(
+                r#"
+                    library Retrieve version '1.0.0'
+                    using FHIR version '4.0.0'
+                    include FHIRHelpers version '4.0.0'
+
+                    context Patient
+
+                    define Criterion:
+                      Patient.gender = 'female'
+
+                    define InInitialPopulation:
+                      Criterion
+                "#,
+            );
+        });
+
+        // feasibility request
+        let request = FeasibilityRequest {
+            id: Uuid::new_v4(),
+            status: Pending,
+            query: Value::Null,
+            date: Utc::now(),
+            result_duration: None,
+            result_code: None,
+            result_body: None,
+        };
+
+        // mock fhir server
+        let fhir_server = MockServer::start();
+        let post_resources = fhir_server.mock(|when, then| {
+            when.method(POST)
+                .header("content-type", "application/fhir+json")
+                .path("/fhir");
+            then.status(200);
+        });
+        let evaluate = fhir_server.mock(|when, then| {
+            when.method(GET)
+                .path("/fhir/Measure/$evaluate-measure")
+                .query_param("measure", format!("urn:uuid:{}", request.id));
+            then.status(200);
+        });
+
+        let client = TargetClient::Cql(
+            CqlClient::new(
+                &Feasibility {
+                    service: "cql".to_string(),
+                    base_url: translate.base_url(),
+                    auth: None,
+                },
+                &FhirServer {
+                    base_url: format!("{}/fhir", fhir_server.base_url()),
+                    auth: None,
+                },
+            )
+            .unwrap(),
+        );
+
+        // setup websocket server
+        feed_websocket(request).await;
 
         let url = "ws://localhost:12345/";
         connect(url.into_client_request().unwrap(), client)
             .await
             .unwrap();
 
-        execute_mock.assert();
+        translate_mock.assert();
+        post_resources.assert();
+        evaluate.assert();
     }
 }

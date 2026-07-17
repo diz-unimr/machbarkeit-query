@@ -9,7 +9,8 @@ pub(crate) struct App {
 #[derive(Default, Deserialize, Clone)]
 pub(crate) struct AppConfig {
     pub(crate) app: App,
-    pub(crate) feasibility: Server,
+    pub(crate) feasibility: Feasibility,
+    pub(crate) fhir_server: Option<FhirServer>,
     pub(crate) broker: Broker,
 }
 
@@ -20,7 +21,14 @@ pub(crate) struct Broker {
 }
 
 #[derive(Default, Debug, Deserialize, Clone)]
-pub(crate) struct Server {
+pub(crate) struct Feasibility {
+    pub(crate) service: String,
+    pub(crate) base_url: String,
+    pub(crate) auth: Option<Auth>,
+}
+
+#[derive(Default, Debug, Deserialize, Clone)]
+pub(crate) struct FhirServer {
     pub(crate) base_url: String,
     pub(crate) auth: Option<Auth>,
 }
@@ -33,8 +41,8 @@ pub(crate) struct Auth {
 
 #[derive(Default, Debug, Deserialize, Clone)]
 pub(crate) struct Basic {
-    pub(crate) user: Option<String>,
-    pub(crate) password: Option<String>,
+    pub(crate) user: String,
+    pub(crate) password: String,
 }
 
 #[derive(Default, Debug, Deserialize, Clone)]

@@ -13,15 +13,15 @@ serde = { version = "1.0.219", features = ["derive"] }
 uuid = { version = "1.17.0", features = ["v4", "serde"] }
 log = "0.4.27"
 serde_json = "1.0.141"
-reqwest = "0.13.0"
+reqwest = { version = "0.13.0", features = ["json"] }
 config = "0.15.13"
 serde_derive = "1.0.219"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 thiserror = "2.0.12"
 oauth2 = { version = "5.0.0", features = ["reqwest", "rustls-tls", "reqwest-blocking"] }
 http = "1.3.1"
-env_logger = "0.11.8"
 futures-channel = "0.3.31"
+base64 = "0.22.1"
 
 [dev-dependencies]
 httpmock = "0.8.1"
