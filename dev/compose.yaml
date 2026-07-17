@@ -25,12 +25,8 @@ services:
     environment:
       - LOG_LEVEL=debug
       - BASE_URL=http://localhost:3000
-      - AUTH__OIDC__ISSUER_URL
-      - AUTH__OIDC__CLIENT_ID
-      - AUTH__OIDC__CLIENT_SECRET
       - CORS__ALLOW_ORIGIN=http://localhost:5173
       - SESSION__CROSS_DOMAIN=false
-      - MDR__ENDPOINT=https://mdr.diz.uni-marburg.de/api
       - DATABASE__URL=sqlite://db.sqlite?mode=rwc
     ports:
       - "3000:3000"

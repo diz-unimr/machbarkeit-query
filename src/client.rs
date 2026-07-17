@@ -14,13 +14,13 @@ pub(crate) enum TargetClient {
 }
 
 impl TargetClient {
-    pub(crate) fn execute(
+    pub(crate) async fn execute(
         &self,
         request: FeasibilityRequest,
-    ) -> impl Future<Output = anyhow::Result<FeasibilityRequest>> + Send {
+    ) -> anyhow::Result<FeasibilityRequest> {
         match self {
-            TargetClient::Cql(cql) => cql.execute(request).boxed(),
-            TargetClient::Flare(flare) => flare.execute(request).boxed(),
+            TargetClient::Cql(cql) => cql.execute(request).boxed().await,
+            TargetClient::Flare(flare) => flare.execute(request).boxed().await,
         }
     }
 }
