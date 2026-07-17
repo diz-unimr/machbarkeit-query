@@ -99,6 +99,7 @@ impl From<Bytes> for Library {
 
 #[derive(Serialize)]
 struct Measure {
+    resource_type: &'static str,
     url: String,
     status: String,
     subject_codeable_concept: CodeableConcept,
@@ -192,8 +193,9 @@ impl CqlClient {
 
         let library: Library = self.translate(&request.query).await?.into();
         let measure = Measure {
+            resource_type: "Measure",
             url: format!("urn:uuid:{}", Uuid::new_v4()),
-            status: "".to_string(),
+            status: "active".to_string(),
             subject_codeable_concept: CodeableConcept {
                 coding: vec![Coding {
                     system: "http://hl7.org/fhir/resource-types".to_string(),
@@ -263,7 +265,9 @@ impl CqlClient {
             )
             .send()
             .await?;
-        let report: MeasureReport = serde_json::from_str(response.text().await?.as_str())?;
+
+        let resp_text = response.text().await?;
+        let report: MeasureReport = serde_json::from_str(resp_text.as_str())?;
         // TODO parse eval-duration and log
 
         let status = match report.status.as_str() {
