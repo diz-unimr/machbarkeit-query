@@ -130,6 +130,7 @@ mod tests {
     use httpmock::Method::{GET, POST};
     use httpmock::MockServer;
     use serde_json::Value;
+    use std::net::SocketAddr;
     use tokio::net::TcpListener;
     use tokio_tungstenite::accept_async;
     use tokio_tungstenite::tungstenite::client::IntoClientRequest;
@@ -159,7 +160,7 @@ mod tests {
         );
 
         // setup websocket server
-        feed_websocket(FeasibilityRequest {
+        let addr = feed_websocket(FeasibilityRequest {
             id: Uuid::new_v4(),
             status: Pending,
             query: Value::Null,
@@ -169,8 +170,9 @@ mod tests {
             result_body: None,
         })
         .await;
+        let url = format!("ws://{addr}");
 
-        let url = "ws://localhost:12345/";
+        // connect websocket
         connect(url.into_client_request().unwrap(), client)
             .await
             .unwrap();
@@ -178,10 +180,12 @@ mod tests {
         execute_mock.assert();
     }
 
-    async fn feed_websocket(request: FeasibilityRequest) {
+    async fn feed_websocket(request: FeasibilityRequest) -> SocketAddr {
         let (tx, rx) = futures_channel::oneshot::channel();
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let listener_address = listener.local_addr().unwrap();
         let f = async move {
-            let listener = TcpListener::bind("127.0.0.1:12345").await.unwrap();
             tx.send(()).unwrap();
             let (connection, _) = listener.accept().await.expect("No connections to accept");
             let stream = accept_async(connection).await;
@@ -191,6 +195,7 @@ mod tests {
         };
         tokio::spawn(f);
         rx.await.expect("Failed to wait for server to be ready");
+        listener_address
     }
 
     #[tokio::test]
@@ -261,9 +266,10 @@ mod tests {
         );
 
         // setup websocket server
-        feed_websocket(request).await;
+        let addr = feed_websocket(request).await;
+        let url = format!("ws://{addr}");
 
-        let url = "ws://localhost:12345/";
+        // connect websocket
         connect(url.into_client_request().unwrap(), client)
             .await
             .unwrap();
