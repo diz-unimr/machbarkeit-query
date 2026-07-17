@@ -10,9 +10,9 @@ pub(crate) enum QueryState {
     Completed,
 }
 
-impl Into<String> for QueryState {
-    fn into(self) -> String {
-        match self {
+impl From<QueryState> for String {
+    fn from(state: QueryState) -> Self {
+        match state {
             QueryState::Pending => "pending".to_string(),
             QueryState::Completed => "completed".to_string(),
         }
@@ -31,6 +31,20 @@ pub(crate) struct FeasibilityRequest {
     pub(crate) result_body: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) result_duration: Option<u32>,
+}
+
+impl FeasibilityRequest {
+    pub(crate) fn result(&self, status: QueryState, result_code: u16, result_body: String) -> Self {
+        Self {
+            id: self.id,
+            date: self.date,
+            query: self.query.clone(),
+            status,
+            result_code: Some(result_code),
+            result_body: Some(result_body),
+            result_duration: self.result_duration,
+        }
+    }
 }
 
 impl TryInto<Message> for FeasibilityRequest {

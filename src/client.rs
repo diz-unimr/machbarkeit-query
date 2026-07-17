@@ -1,72 +1,31 @@
-use crate::config::Server;
-use crate::model::{FeasibilityRequest, QueryState};
-use log::info;
-use reqwest::header::{HeaderMap, HeaderValue, AUTHORIZATION, CONTENT_TYPE};
-use reqwest::Client;
+pub mod cql;
+pub mod flare;
 
-#[derive(Debug, Clone)]
-pub(crate) struct RestClient {
-    client: Client,
-    url: String,
+use crate::client::cql::CqlClient;
+use crate::client::flare::FlareClient;
+use crate::config::Auth;
+use crate::model::FeasibilityRequest;
+use futures_util::FutureExt;
+
+#[allow(clippy::large_enum_variant)]
+pub(crate) enum TargetClient {
+    Cql(CqlClient),
+    Flare(FlareClient),
 }
 
-impl RestClient {
-    pub(crate) fn new(config: &Server) -> Result<Self, anyhow::Error> {
-        // default headers
-        let mut headers = HeaderMap::new();
-        headers.insert(
-            CONTENT_TYPE,
-            HeaderValue::from_static("application/fhir+json"),
-        );
-        // set auth header as default
-        if let Some(auth) = config.auth.as_ref().and_then(|a| a.basic.as_ref())
-            && let (Some(user), Some(password)) = (auth.user.clone(), auth.password.clone())
-        {
-            // auth header
-            let auth_value = create_auth_header(user, Some(password));
-            headers.insert(AUTHORIZATION, auth_value);
+impl TargetClient {
+    pub(crate) fn execute(
+        &self,
+        request: FeasibilityRequest,
+    ) -> impl Future<Output = anyhow::Result<FeasibilityRequest>> + Send {
+        match self {
+            TargetClient::Cql(cql) => cql.execute(request).boxed(),
+            TargetClient::Flare(flare) => flare.execute(request).boxed(),
         }
-
-        // client
-        let client = Client::builder().default_headers(headers.clone()).build()?;
-
-        Ok(RestClient {
-            client,
-            url: config.base_url.clone(),
-        })
-    }
-
-    pub(crate) async fn execute(
-        self,
-        request: &mut FeasibilityRequest,
-    ) -> Result<&FeasibilityRequest, anyhow::Error> {
-        info!("Sending request id={} to {}", request.id, self.url);
-        let payload = serde_json::to_string(&request.query)?;
-        let response = self
-            .client
-            .post(self.url)
-            .body(payload.to_owned())
-            .header(CONTENT_TYPE, "application/sq+json")
-            .send()
-            .await?;
-
-        request.status = QueryState::Completed;
-        request.result_code = Some(response.status().as_u16());
-        request.result_body = Some(response.text().await?);
-        Ok(request)
     }
 }
 
-fn create_auth_header(user: String, password: Option<String>) -> HeaderValue {
-    let builder = Client::new()
-        .get("http://localhost")
-        .basic_auth(user, password);
-
-    builder
-        .build()
-        .unwrap()
-        .headers()
-        .get(AUTHORIZATION)
-        .unwrap()
-        .clone()
+struct HttpEndpoint {
+    base_url: String,
+    auth: Option<Auth>,
 }

@@ -5,7 +5,9 @@ mod model;
 mod websocket;
 
 use crate::auth::{TokenService, TokenServiceConfig};
-use crate::client::RestClient;
+use crate::client::cql::CqlClient;
+use crate::client::flare::FlareClient;
+use crate::client::TargetClient;
 use crate::config::AppConfig;
 use anyhow::anyhow;
 pub use futures_util::StreamExt;
@@ -27,7 +29,7 @@ async fn main() -> Result<(), anyhow::Error> {
         .init();
 
     // http client
-    let client = RestClient::new(&config.feasibility)?;
+    // let client = Client::builder().build()?;
 
     // auth token service
     let token_service = match &config.broker.auth.and_then(|a| a.client_credentials) {
@@ -61,6 +63,17 @@ async fn main() -> Result<(), anyhow::Error> {
             )?,
         );
     };
+
+    let client: TargetClient = match config.feasibility.service.to_lowercase().as_str() {
+        "cql" => Ok(TargetClient::Cql(CqlClient::new(
+            &config.feasibility,
+            &config.fhir_server.ok_or(anyhow!(
+                "FHIR server config missing for feasibility target: CQL"
+            ))?,
+        )?)),
+        "flare" => Ok(TargetClient::Flare(FlareClient::new(&config.feasibility)?)),
+        v => Err(anyhow::anyhow!("Unknown query service: {v}")),
+    }?;
 
     // connect to websocket
     websocket::connect(request, client).await

@@ -1,13 +1,20 @@
 app:
   log_level: info
 feasibility:
+  service: cql
   base_url:
-  auth:
-    basic:
-      user:
-      password:
-broker:
-  url:
+#  auth:
+#    basic:
+#      user:
+#      password:
+#fhir_server:
+#  base_url:
+#  auth:
+#    basic:
+#      user:
+#      password:
+#broker:
+#  url:
 #  auth:
 #    client_credentials:
 #      token_url:
