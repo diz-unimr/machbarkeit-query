@@ -11,27 +11,53 @@
 This service relays feasibility requests from a broker to a feasibility execution service and sends the result back to
 the broker.
 
-Currently, only [FLARE](https://github.com/medizininformatik-initiative/flare) (Feasibility Analysis Request Executor)
-with
-the [Structured Query](https://github.com/num-codex/codex-structured-query/blob/main/structured-query/documentation/2021_01_29StructeredQueriesDocumentation(Draft).md)
-format is supported.
-
 The query service communicates with the broker through a websocket connection to retrieve requests and send back
 results. The actual (structured) query is send to the execution service with a HTTP request.
+
+The execution service can bei either `cql`  or `flare`.
+
+## CQL
+
+`default`
+
+The default execution service, uses CQL with the help of a translation service in to provide
+the query definition (Library) from the request in the _Structured Query_ format.
+
+The following configuration properties are mandatory when using `cql`:
+
+- `feasibility.service`: `cql`
+- `feasibility.base_url`: Base url of [diz-unimr/translate](https://github.com/diz-unimr/translate)
+- `fhir_server.base_url`: Base url of the FHIR server
+
+## Flare
+
+Executes FHIR search queries via [FLARE](https://github.com/medizininformatik-initiative/flare)
+(Feasibility Analysis Request Executor).
+
+The following configuration properties are mandatory when using `flare`:
+
+`feasibility.service`: `flare`
+`feasibility.base_url`: [FLARE](https://github.com/medizininformatik-initiative/flare) base url
 
 ## Configuration properties
 
 Application properties are read from a properties file ([app.yaml](./app.yaml)) with default values.
 
-| Name                             | Default | Description                               |
-|----------------------------------|---------|-------------------------------------------|
-| `app.log_level`                  | info    | Log level (error,warn,info,debug,trace)   |
-| `feasibility.base_url`           |         | Url of the (FLARE) query execute endpoint |
-| `broker.url`                     |         | Broker to connect to for requests (wss)   |
-| `broker.auth.client_credentials` |         | OIDC Client Credentials secret            |
-| `broker.auth.token_url`          |         | OIDC Issuer token url                     |
-| `broker.auth.client_id`          |         | OIDC Client id                            |
-| `broker.auth.client_secret`      |         | OIDC Client secret                        |
+| Name                              | Default | Description                                              |
+|-----------------------------------|---------|----------------------------------------------------------|
+| `app.log_level`                   | info    | Log level (error,warn,info,debug,trace)                  |
+| `feasibility.service`             | cql     | Feasibility execution service (`cql` or `flare`)         |
+| `feasibility.base_url`            |         | Base url of the query execution service                  |
+| `feasibility.auth.basic.user`     |         | BasicAuth user of the feasibility service (optional)     |
+| `feasibility.auth.basic.password` |         | BasicAuth password of the feasibility service (optional) |
+| `fhir_server.base_url`            |         | Base url of the FHIR server (mandatory fro `cql`)        |
+| `fhir_server.auth.basic.user`     |         | BasicAuth user of the FHIR server (optional)             |
+| `fhir_server.auth.basic.password` |         | BasicAuth password of the FHIR server (optional)         |
+| `broker.url`                      |         | Broker to connect to for requests (ws/wss)               |
+| `broker.auth.client_credentials`  |         | OIDC Client Credentials secret                           |
+| `broker.auth.token_url`           |         | OIDC Issuer token url                                    |
+| `broker.auth.client_id`           |         | OIDC Client id                                           |
+| `broker.auth.client_secret`       |         | OIDC Client secret                                       |
 
 ### Environment variables
 
@@ -42,7 +68,7 @@ with double underscore (`__`).
 
 Docker compose:
 
-```yaml
+  ```yaml
 query:
   image: ghcr.io/diz-unimr/machbarkeit-query:1.1.2
   environment:
