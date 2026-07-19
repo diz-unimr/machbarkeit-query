@@ -43,21 +43,21 @@ The following configuration properties are mandatory when using `flare`:
 
 Application properties are read from a properties file ([app.yaml](./app.yaml)) with default values.
 
-| Name                              | Default | Description                                              |
-|-----------------------------------|---------|----------------------------------------------------------|
-| `app.log_level`                   | info    | Log level (error,warn,info,debug,trace)                  |
-| `feasibility.service`             | cql     | Feasibility execution service (`cql` or `flare`)         |
-| `feasibility.base_url`            |         | Base url of the query execution service                  |
-| `feasibility.auth.basic.user`     |         | BasicAuth user of the feasibility service (optional)     |
-| `feasibility.auth.basic.password` |         | BasicAuth password of the feasibility service (optional) |
-| `fhir_server.base_url`            |         | Base url of the FHIR server (mandatory fro `cql`)        |
-| `fhir_server.auth.basic.user`     |         | BasicAuth user of the FHIR server (optional)             |
-| `fhir_server.auth.basic.password` |         | BasicAuth password of the FHIR server (optional)         |
-| `broker.url`                      |         | Broker to connect to for requests (ws/wss)               |
-| `broker.auth.client_credentials`  |         | OIDC Client Credentials secret                           |
-| `broker.auth.token_url`           |         | OIDC Issuer token url                                    |
-| `broker.auth.client_id`           |         | OIDC Client id                                           |
-| `broker.auth.client_secret`       |         | OIDC Client secret                                       |
+| Name                                           | Default | Description                                              |
+|------------------------------------------------|---------|----------------------------------------------------------|
+| `app.log_level`                                | info    | Log level (error,warn,info,debug,trace)                  |
+| `feasibility.service`                          | cql     | Feasibility execution service (`cql` or `flare`)         |
+| `feasibility.base_url`                         |         | Base url of the query execution service                  |
+| `feasibility.auth.basic.user`                  |         | BasicAuth user of the feasibility service (optional)     |
+| `feasibility.auth.basic.password`              |         | BasicAuth password of the feasibility service (optional) |
+| `fhir_server.base_url`                         |         | Base url of the FHIR server (mandatory fro `cql`)        |
+| `fhir_server.auth.basic.user`                  |         | BasicAuth user of the FHIR server (optional)             |
+| `fhir_server.auth.basic.password`              |         | BasicAuth password of the FHIR server (optional)         |
+| `broker.url`                                   |         | Broker to connect to for requests (ws/wss)               |
+| `broker.auth.client_credentials`               |         | OIDC Client Credentials secret                           |
+| `broker.auth.client_credentials.token_url`     |         | OIDC Issuer token url                                    |
+| `broker.auth.client_credentials.client_id`     |         | OIDC Client id                                           |
+| `broker.auth.client_credentials.client_secret` |         | OIDC Client secret                                       |
 
 ### Environment variables
 
@@ -70,14 +70,15 @@ Docker compose:
 
   ```yaml
 query:
-  image: ghcr.io/diz-unimr/machbarkeit-query:1.1.2
+  image: ghcr.io/diz-unimr/machbarkeit-query:1.2.0
   environment:
-    APP__LOG_LEVEL: debug
-    FEASIBILITY__BASE_URL: http://flare/query/execute
-    BROKER__URL: ws://broker/feasibility/ws
-    BROKER__AUTH__CLIENT_CREDENTIALS__CLIENT_ID: machbarkeit
-    BROKER__AUTH__CLIENT_CREDENTIALS__CLIENT_SECRET: ${CLIENT_SECRET}
-    BROKER__AUTH__CLIENT_CREDENTIALS__TOKEN_URL: https://idp/auth/realms/Machbarkeit/protocol/openid-connect/token
+    app.log_level: debug
+    feasibility.base_url: http://feasibility/
+    fhir_server.base_url: http://fhir-server/fhir
+    broker.url: ws://broker/feasibility/ws
+    broker.auth.client_credentials.client_id: machbarkeit
+    broker.auth.client_credentials.client_secret: ${CLIENT_SECRET}
+    broker.auth.client_credentials.token_url: https://idp/auth/realms/Machbarkeit/protocol/openid-connect/token
 ```
 
 ## License
