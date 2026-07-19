@@ -306,7 +306,6 @@ impl CqlClient {
             )),
         }?;
 
-        // TODO parse eval-duration and log
         let request = set_result(request, &report)?;
 
         Ok(request)
@@ -349,4 +348,53 @@ fn set_result(
         })
         .ok_or(anyhow!("Failed to parse result from MeasureReport"))?;
     Ok(request.result(QueryState::Completed, status.as_u16(), result))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::QueryState::{Completed, Pending};
+    use chrono::Utc;
+
+    #[test]
+    fn test_set_result() {
+        let request = FeasibilityRequest {
+            id: Uuid::new_v4(),
+            status: Pending,
+            query: Value::Null,
+            date: Utc::now(),
+            result_duration: None,
+            result_code: None,
+            result_body: None,
+        };
+        let expected = FeasibilityRequest {
+            id: request.id,
+            status: Completed,
+            query: Value::Null,
+            date: request.date,
+            result_duration: None,
+            result_code: Some(200),
+            result_body: Some(42.to_string()),
+        };
+
+        let report = MeasureReport {
+            status: "complete".to_string(),
+            group: vec![MeasureReportPopulationGroup {
+                population: vec![PopulationGroupCount {
+                    code: CodeableConcept {
+                        coding: vec![Coding {
+                            system: "http://terminology.hl7.org/CodeSystem/measure-population"
+                                .to_string(),
+                            code: "initial-population".to_string(),
+                        }],
+                    },
+                    count: 42,
+                }],
+            }],
+        };
+
+        let actual = set_result(request, &report).unwrap();
+
+        assert_eq!(actual, expected);
+    }
 }
