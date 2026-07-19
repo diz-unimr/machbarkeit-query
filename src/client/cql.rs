@@ -5,7 +5,7 @@ use anyhow::{anyhow, Error};
 use base64::{engine::general_purpose, Engine as _};
 use http::header::CONTENT_TYPE;
 use http::{Method, StatusCode};
-use log::info;
+use log::{debug, info};
 use reqwest::{Client, RequestBuilder};
 use serde_derive::{Deserialize, Serialize};
 use serde_json::Value;
@@ -67,7 +67,7 @@ struct MeasureReportPopulationGroup {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct Library {
-    resource_type: &'static str,
+    resource_type: String,
     url: String,
     status: String,
     #[serde(rename = "type")]
@@ -78,7 +78,7 @@ struct Library {
 impl From<Bytes> for Library {
     fn from(value: Bytes) -> Self {
         Library {
-            resource_type: "Library",
+            resource_type: "Library".to_string(),
             status: "active".to_string(),
             library_type: CodeableConcept {
                 coding: vec![{
@@ -98,8 +98,9 @@ impl From<Bytes> for Library {
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Measure {
-    resource_type: &'static str,
+    resource_type: String,
     url: String,
     status: String,
     subject_codeable_concept: CodeableConcept,
@@ -108,30 +109,38 @@ struct Measure {
     group: Vec<MeasurePopulationGroup>,
 }
 
-#[derive(Serialize, Deserialize)]
-struct Quantity {
-    value: String,
-    system: String,
-    code: String,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct EvalDuration {
-    url: String,
-    value_quantity: Quantity,
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum MeasureResponse {
+    MeasureReport(MeasureReport),
+    OperationOutcome(OperationOutcome),
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct OperationOutcome {
+    issue: Vec<OutcomeIssue>,
+}
+
+#[derive(Deserialize)]
+struct OutcomeIssue {
+    diagnostics: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct MeasureReport {
     status: String,
-    extension: Vec<EvalDuration>,
     group: Vec<MeasureReportPopulationGroup>,
 }
 
 #[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
 struct Bundle {
+    resource_type: String,
     entry: Vec<BundleEntry>,
+    #[serde(rename = "type")]
+    r_type: String,
 }
 
 #[derive(Serialize)]
@@ -147,6 +156,7 @@ struct BundleEntryRequest {
 }
 
 #[derive(Serialize)]
+#[serde(untagged)]
 enum Resource {
     Library(Library),
     Measure(Measure),
@@ -155,12 +165,10 @@ enum Resource {
 impl CqlClient {
     pub(crate) fn new(feasibility: &Feasibility, fhir_server: &FhirServer) -> Result<Self, Error> {
         Ok(CqlClient {
-            // todo
             translate: HttpEndpoint {
                 base_url: feasibility.base_url.clone(),
                 auth: feasibility.auth.clone(),
             },
-            // todo
             fhir_server: HttpEndpoint {
                 base_url: fhir_server.base_url.clone(),
                 auth: fhir_server.auth.clone(),
@@ -170,7 +178,6 @@ impl CqlClient {
     }
 
     async fn translate(&self, query: &Value) -> Result<Bytes, Error> {
-        // todo
         let builder = self.build_request(&self.translate, "/translate", Method::POST);
 
         let response = builder
@@ -192,9 +199,10 @@ impl CqlClient {
         );
 
         let library: Library = self.translate(&request.query).await?.into();
+        let measure_id = format!("urn:uuid:{}", Uuid::new_v4());
         let measure = Measure {
-            resource_type: "Measure",
-            url: format!("urn:uuid:{}", Uuid::new_v4()),
+            resource_type: "Measure".to_string(),
+            url: measure_id.clone(),
             status: "active".to_string(),
             subject_codeable_concept: CodeableConcept {
                 coding: vec![Coding {
@@ -226,6 +234,8 @@ impl CqlClient {
             }],
         };
         let payload = Bundle {
+            resource_type: "Bundle".to_string(),
+            r_type: "transaction".to_string(),
             entry: vec![
                 BundleEntry {
                     resource: Resource::Library(library),
@@ -247,51 +257,58 @@ impl CqlClient {
             "Create Library + Measure resources id={} on={}",
             request.id, self.fhir_server.base_url
         );
-        self.build_request(&self.fhir_server, "", Method::POST)
+        let response = self
+            .build_request(&self.fhir_server, "", Method::POST)
             .json(&payload)
             .header(CONTENT_TYPE, "application/fhir+json")
             .send()
             .await?;
 
+        let status = response.status();
+        let resp_text = response.text().await?;
+        debug!("Response from FHIR server: {}", resp_text);
+        if !status.is_success() {
+            return Ok(request.result(QueryState::Completed, status.as_u16(), resp_text));
+        }
+
         info!(
-            "Evaluate Measure request id={} on {}",
-            request.id, self.fhir_server.base_url
+            "Evaluate measure({}) for request({}) on {}",
+            measure_id, request.id, self.fhir_server.base_url
         );
         let response = self
             .build_request(
                 &self.fhir_server,
-                format!("/Measure/$evaluate-measure?measure=urn:uuid:{}", request.id).as_str(),
+                format!(
+                    "/Measure/$evaluate-measure?measure={}&periodStart=2000&periodEnd=2030",
+                    measure_id
+                )
+                .as_str(),
                 Method::GET,
             )
             .send()
             .await?;
 
         let resp_text = response.text().await?;
-        let report: MeasureReport = serde_json::from_str(resp_text.as_str())?;
+        debug!("Measure response: {}", resp_text);
+        let response: MeasureResponse = serde_json::from_str(resp_text.as_str())?;
+
+        // parse response
+        let report = match response {
+            MeasureResponse::MeasureReport(report) => Ok(report),
+            MeasureResponse::OperationOutcome(outcome) => Err(anyhow!(
+                "Error from $evaluate-measure: {}",
+                outcome
+                    .issue
+                    .iter()
+                    .map(|i| i.diagnostics.as_str())
+                    .collect::<Vec<&str>>()
+                    .join(", ")
+            )),
+        }?;
+
         // TODO parse eval-duration and log
+        let request = set_result(request, &report)?;
 
-        let status = match report.status.as_str() {
-            "complete" => StatusCode::OK,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-
-        let result: String = report
-            .group
-            .iter()
-            .flat_map(|g| g.population.iter())
-            .find_map(|g| {
-                if g.code.coding.iter().any(|c| {
-                    c.system == "http://terminology.hl7.org/CodeSystem/measure-population"
-                        && c.code == "initial-population"
-                }) {
-                    Some(g.count.to_string())
-                } else {
-                    None
-                }
-            })
-            .ok_or(anyhow!("Failed to parse result from MeasureReport"))?;
-
-        let request = request.result(QueryState::Completed, status.as_u16(), result);
         Ok(request)
     }
 
@@ -305,4 +322,31 @@ impl CqlClient {
 
         builder
     }
+}
+
+fn set_result(
+    request: FeasibilityRequest,
+    report: &MeasureReport,
+) -> anyhow::Result<FeasibilityRequest> {
+    let status = match report.status.as_str() {
+        "complete" => StatusCode::OK,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
+    };
+
+    let result: String = report
+        .group
+        .iter()
+        .flat_map(|g| g.population.iter())
+        .find_map(|g| {
+            if g.code.coding.iter().any(|c| {
+                c.system == "http://terminology.hl7.org/CodeSystem/measure-population"
+                    && c.code == "initial-population"
+            }) {
+                Some(g.count.to_string())
+            } else {
+                None
+            }
+        })
+        .ok_or(anyhow!("Failed to parse result from MeasureReport"))?;
+    Ok(request.result(QueryState::Completed, status.as_u16(), result))
 }

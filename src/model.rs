@@ -34,16 +34,17 @@ pub(crate) struct FeasibilityRequest {
 }
 
 impl FeasibilityRequest {
-    pub(crate) fn result(&self, status: QueryState, result_code: u16, result_body: String) -> Self {
-        Self {
-            id: self.id,
-            date: self.date,
-            query: self.query.clone(),
-            status,
-            result_code: Some(result_code),
-            result_body: Some(result_body),
-            result_duration: self.result_duration,
-        }
+    pub(crate) fn result(
+        mut self,
+        status: QueryState,
+        result_code: u16,
+        result_body: String,
+    ) -> Self {
+        self.status = status;
+        self.result_code = Some(result_code);
+        self.result_body = Some(result_body);
+
+        self
     }
 }
 
