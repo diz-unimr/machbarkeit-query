@@ -91,7 +91,7 @@ async fn handle_request(
             match client.execute(r.clone()).await {
                 Ok(result) => {
                     // send back to websocket
-                    info!("Sending back feasibility result id={}", result.id);
+                    info!("[Returning] success result({})", result.id);
                     if let Err(e) = sender.send(result.clone()) {
                         Err(anyhow!("Failed to send message: {}", e))?;
                     }
@@ -102,7 +102,7 @@ async fn handle_request(
                         StatusCode::INTERNAL_SERVER_ERROR.as_u16(),
                         format!("Failed to execute request: {e}"),
                     );
-                    info!("Sending back feasibility result id={}: {}", r.id, e);
+                    info!("[Returning] error result({}): {e}", r.id);
 
                     sender.send(r)?;
                 }
@@ -246,7 +246,9 @@ mod tests {
         let evaluate = fhir_server.mock(|when, then| {
             when.method(GET)
                 .path("/fhir/Measure/$evaluate-measure")
-                .query_param("measure", format!("urn:uuid:{}", request.id));
+                .query_param_prefix("measure", "urn:uuid:")
+                .query_param("periodStart", "2000")
+                .query_param("periodEnd", "2030");
             then.status(200);
         });
 
