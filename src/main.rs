@@ -28,6 +28,11 @@ async fn main() -> Result<(), anyhow::Error> {
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| filter.into()))
         .init();
 
+    // enable tls provider
+    rustls::crypto::ring::default_provider()
+        .install_default()
+        .map_err(|_| anyhow!("Failed to install default rustls crypto provider"))?;
+
     // http client
     // let client = Client::builder().build()?;
 
