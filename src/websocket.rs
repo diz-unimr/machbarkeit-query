@@ -91,7 +91,11 @@ async fn handle_request(
             match client.execute(r.clone()).await {
                 Ok(result) => {
                     // send back to websocket
-                    info!("[Returning] success result({})", result.id);
+                    info!(
+                        "[Returning] success result({}): {}",
+                        result.id,
+                        result.result_body.as_deref().unwrap_or("-")
+                    );
                     if let Err(e) = sender.send(result.clone()) {
                         Err(anyhow!("Failed to send message: {}", e))?;
                     }

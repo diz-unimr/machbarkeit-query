@@ -51,7 +51,7 @@ struct PopulationGroupCriteria {
 #[derive(Deserialize)]
 struct PopulationGroupCount {
     code: CodeableConcept,
-    count: u8,
+    count: u64,
 }
 
 #[derive(Serialize)]
@@ -254,7 +254,7 @@ impl CqlClient {
             ],
         };
         info!(
-            "Create Library + Measure resources id={} on={}",
+            "POST Library/Measure resources for request id={} on={}",
             request.id, self.fhir_server.base_url
         );
         let response = self
