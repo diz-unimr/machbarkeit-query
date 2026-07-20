@@ -36,8 +36,8 @@ Executes FHIR search queries via [FLARE](https://github.com/medizininformatik-in
 
 The following configuration properties are mandatory when using `flare`:
 
-`feasibility.service`: `flare`
-`feasibility.base_url`: [FLARE](https://github.com/medizininformatik-initiative/flare) base url
+- `feasibility.service`: `flare`
+- `feasibility.base_url`: [FLARE](https://github.com/medizininformatik-initiative/flare) base url
 
 ## Configuration properties
 
