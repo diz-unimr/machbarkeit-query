@@ -16,6 +16,8 @@ results. The actual (structured) query is send to the execution service with a H
 
 The execution service can bei either `cql`  or `flare`.
 
+![Machbarkeit architecture](img/machbarkeit_architecture_query.svg)
+
 ## CQL
 
 `default`
